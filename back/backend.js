@@ -35,6 +35,8 @@ const ryd = require("./cache_dir/ryd_cache_manager")
 const video_rating = require("./cache_dir/rating_cache_manager")
 const config = require("./config.json")
 const child_process = require("child_process")
+const yt2009charts = require("./yt2009charts")
+let devTimings = false;
 
 const https = require("https")
 const fs = require("fs")
@@ -184,22 +186,6 @@ if(!config.disableWs) {
         })
     }
 }
-let public = false
-if(config.public
-&& typeof(config.public) == "string"
-&& config.public.length > 2) {
-    public = config.public
-    let ver = require("../package.json")
-    let version = ver.version
-    const fetch = require("node-fetch")
-    fetch("https://orzeszek.website:204/api/hello", {
-        "headers": {
-            "pdata": public,
-            "yt2009": version
-        },
-        "method": "POST"
-    })
-}
 
 app.get('/back/*', (req,res) => {
     res.redirect("https://github.com/ftde0/yt2009")
@@ -263,6 +249,13 @@ watchpage
 */
 
 app.get("/watch", (req, res) => {
+    let x;
+    let t = 0;
+    if(devTimings) {
+        x = setInterval(function() {
+            t += 0.1
+        }, 100)
+    }
     if(!yt2009_utils.isAuthorized(req)) {
         if(yt2009_utils.isTemplocked(req)) {
             res.redirect("/t.htm")
@@ -315,6 +308,9 @@ app.get("/watch", (req, res) => {
     }
 
     yt2009.fetch_video_data(id, (data) => {
+        if(devTimings) {
+            console.log(t, "fetch video data done")
+        }
         if(!data) {
             res.redirect("/?ytsession=1")
             return;
@@ -325,8 +321,12 @@ app.get("/watch", (req, res) => {
             }
             code = yt2009_languages.apply_lang_to_code(code, req)
             code = yt2009_doodles.applyDoodle(code)
+            if(devTimings) {
+                console.log(t, "apply watchpage done")
+                clearInterval(x)
+            }
             res.send(code)
-        }))
+        }), id)
     }, req.headers["user-agent"],
         yt2009_utils.get_used_token(req),
         useFlash, 
@@ -544,7 +544,9 @@ app.post("/video_rate", (req, res) => {
         res.sendStatus(401)
         return;
     }
-    if(!req.headers.source) {
+    if(!req.headers.source
+    || !req.headers.rating
+    || !req.headers.source.includes("v=")) {
         res.sendStatus(400)
         return;
     }
@@ -566,6 +568,11 @@ app.get("/ryd_request", (req, res) => {
         res.redirect("/unauth.htm")
         return;
     }
+    if(!req.headers.source
+    || !req.headers.source.includes("v=")) {
+        res.sendStatus(400)
+        return;
+    }
 
     let id = req.headers.source.split("v=")[1].split("&")[0]
     ryd.fetch(id, (data) => {
@@ -573,7 +580,7 @@ app.get("/ryd_request", (req, res) => {
         if(!toSend.includes(".5")) {
             toSend += ".0"
         } 
-        res.send(toSend)
+        try {res.send(toSend)}catch(error) {}
     })
 })
 
@@ -790,7 +797,7 @@ app.get("/get_video_info", (req, res) => {
                 config.port
             }/get_video?video_id=${data.id}/mp4`
             res.send(`status=ok
-length_seconds=1
+length_seconds=${data.length}
 keywords=a
 vq=None
 muted=0
@@ -1072,25 +1079,29 @@ function checkBaseline(req, res) {
 app.get("/channel_fh264_getvideo", (req, res) => {
     if(checkBaseline(req, res)) return;
 
-    req.query.v = req.query.v.replace(/[^a-zA-Z0-9+-+_]/g, "").substring(0, 11)
+    req.query.v = req.query.v.replace(/[^a-zA-Z0-9+\-+_]/g, "").substring(0, 11)
 
     if(yt2009_exports.getStatus(req.query.v)) {
         // wait for mp4 while it's downloading
         yt2009_exports.waitForStatusChange(req.query.v, () => {
-            res.redirect("/assets/" + req.query.v + ".mp4")
+            try {res.redirect("/assets/" + req.query.v + ".mp4")}catch(error) {}
         })
         return;
     }
     if(!fs.existsSync("../assets/" + req.query.v + ".mp4")) {
         yt2009_utils.saveMp4(req.query.v, (vid) => {
+            if(!vid) {
+                res.sendStatus(404)
+                return;
+            }
             let vidLink = vid.replace("../", "/")
             if(vidLink.includes("assets/")) {
                 vidLink += ".mp4"
             }
-            res.redirect(vidLink)
+            try {res.redirect(vidLink)}catch(error) {}
         })
     } else {
-        res.redirect("/assets/" + req.query.v + ".mp4")
+        try {res.redirect("/assets/" + req.query.v + ".mp4")}catch(error){}
     }
     
 })
@@ -1098,9 +1109,9 @@ app.get("/channel_fh264_getvideo", (req, res) => {
 function ffmpegEncodeBaseline(req, res) {
     let vId = ""
     if(req.query.v) {
-        vId = req.query.v.replace(/[^a-zA-Z0-9+-+_]/g, "").substring(0, 11)
+        vId = req.query.v.replace(/[^a-zA-Z0-9+\-+_]/g, "").substring(0, 11)
     } else if(req.query.video_id) {
-        vId = req.query.video_id.replace(/[^a-zA-Z0-9+-+_]/g, "").substring(0, 11)
+        vId = req.query.video_id.replace(/[^a-zA-Z0-9+\-+_]/g, "").substring(0, 11)
     }
     
     if(config.env == "dev") {
@@ -1116,7 +1127,10 @@ function ffmpegEncodeBaseline(req, res) {
             res.sendStatus(404)
             return;
         }
-        res.sendFile(filePath)
+        try {
+            res.sendFile(filePath)
+        }
+        catch(error) {}
     }
 
     // reencode from standard mp4 to baseline mp4
@@ -1293,7 +1307,7 @@ app.get("/get_more_comments", (req, res) => {
                     flags.includes("fake_dates")
                     ? yt2009_utils.fakeDateSmall(theoreticalIndex)
                     : comment.time,
-                    comment.content,
+                    comment.content.split("<br><br>").join("<br>"),
                     flags,
                     false,
                     likes,
@@ -2260,7 +2274,7 @@ as sometimes it's not available
 */
 app.get("/retry_video", (req, res) => {
     let id = req.query.video_id.substring(0, 11)
-                .replace(/[^a-zA-Z0-9+-+_]/g, "")
+                .replace(/[^a-zA-Z0-9+\-+_]/g, "")
 
     // check if there actually is a need to retry download
     if(fs.existsSync(`../assets/${id}.mp4`)
@@ -3709,7 +3723,7 @@ app.get("/insight_ajax", (req, res) => {
 
                 // render view chart
                 let chartLink = [
-                    "//chart.apis.google.com/chart?cht=lc:nda&chs=593x110",
+                    "/chart?cht=lc:nda&chs=593x110",
                     "&chco=647b5c",
                     "&chg=0,-1,1,1&chxt=y,x",
                     "&chxs=0N*s*%20,333333,10|1,333333,10",
@@ -3746,7 +3760,7 @@ app.get("/insight_ajax", (req, res) => {
                         if(d !== c
                         && (!countriesParam.includes(d)
                         && !audienceCountries.code_names.includes(d))) {
-                            percentagesParam.push(Math.floor(Math.random() * 10) + 5)
+                            percentagesParam.push(Math.floor(Math.random() * 10) + 13)
                             countriesParam.push(d)
                         }
                     })
@@ -3766,7 +3780,7 @@ app.get("/insight_ajax", (req, res) => {
                 })
                 rCountries.forEach(c => {
                     if(!countriesParam.includes(c)) {
-                        percentagesParam.push(Math.floor(Math.random() * 2) + 2)
+                        percentagesParam.push(Math.floor(Math.random() * 10) + 10)
                         countriesParam.push(c)
                     }
                 })
@@ -3777,7 +3791,7 @@ app.get("/insight_ajax", (req, res) => {
 
                 // render map
                 let mapUrl = [
-                    "//chart.googleapis.com/chart?cht=t&chs=350x170",
+                    "/chart?cht=t&chs=350x170",
                     "&chtm=world&chd=t:" + percentagesParam.join(),
                     "&chf=bg,s,eff8fe",
                     "&chco=f6f6f6,e5e9c9,ced9ab,a7ba7b,86a058,8ba65b,547136,32501a",
@@ -3794,6 +3808,14 @@ app.get("/insight_ajax", (req, res) => {
         return;
     }
     res.sendStatus(400)
+})
+
+app.get("/chart", (req, res) => {
+    if(req.query.chtm == "world") {
+        yt2009charts.genWorld(req, res)
+        return;
+    }
+    yt2009charts.gen(req, res)
 })
 
 /*

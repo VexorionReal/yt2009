@@ -685,6 +685,25 @@ function showStars(rating, source) {
     }
 }
 
+// fastload: refetch comments
+function commandComments() {
+    var r;
+    if (window.XMLHttpRequest) {
+        r = new XMLHttpRequest()
+    } else {
+        r = new ActiveXObject("Microsoft.XMLHTTP");
+    }
+    var r = new XMLHttpRequest();
+    var id = location.href.split("v=")[1].split("&")[0].split("#")[0]
+    r.open("GET", "/fastload_initial_comments?id=" + id)
+    r.send(null)
+    r.onreadystatechange = function(e) {
+        if(r.readyState == 4 || this.readyState == 4 || e.readyState == 4) {
+            $(".comments-container").innerHTML += r.responseText
+        }
+    }
+}
+
 function clearStars() {
     showStars(fullRating, "unhover")
 }

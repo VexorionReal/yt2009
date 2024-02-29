@@ -108,7 +108,8 @@ module.exports = {
     "get_flv": function(req, res) {
         if(req.query.fmt == 5
         || req.query.video_id.includes("/mp4")
-        || (req.headers.referer || "").includes("/mp4")) {
+        || (req.headers.referer || "").includes("/mp4")
+        || req.query.t == "amogus") {
             req.query.video_id = req.query.video_id.replace("/mp4", "")
             res.redirect("/channel_fh264_getvideo?v=" + req.query.video_id)
             return;
@@ -132,7 +133,10 @@ module.exports = {
             }
         }
         this.vid_flv(req.query.video_id, () => {
-            res.redirect(`../assets/${req.query.video_id}.flv`)
+            try {
+                res.redirect(`../assets/${req.query.video_id}.flv`)
+            }
+            catch(error) {}
         })
     },
 

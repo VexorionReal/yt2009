@@ -1029,8 +1029,9 @@ https://web.archive.org/web/20091111/http://www.youtube.com/watch?v=${data.id}`
                     "qualities": data.qualities || false,
                     "upload": data.upload
                 })
-                fs.writeFileSync("./cache_dir/watched_now.json",
-                                JSON.stringify(featured_videos))
+                fs.writeFile("./cache_dir/watched_now.json",
+                            JSON.stringify(featured_videos),
+                            (e) => {})
             }
         }
 
@@ -1134,7 +1135,6 @@ https://web.archive.org/web/20091111/http://www.youtube.com/watch?v=${data.id}`
 
         // if flash player is used
         // hide the html5 js, fix the layout, put a flash player
-        let env = config.env
         let swfFilePath = "/watch.swf"
         let swfArgPath = "video_id"
         if(req.headers.cookie.includes("alt_swf_path")) {
@@ -1152,7 +1152,6 @@ https://web.archive.org/web/20091111/http://www.youtube.com/watch?v=${data.id}`
         if((req.headers["cookie"] || "").includes("f_h264")) {
             flash_url += "%2Fmp4"
         }
-        flash_url += `&iv_module=http%3A%2F%2F${config.ip}%3A${config.port}%2Fiv_module.swf`
         if(useFlash) {
             code = code.replace(
                 `<!DOCTYPE HTML>`,
@@ -1999,6 +1998,14 @@ https://web.archive.org/web/20091111/http://www.youtube.com/watch?v=${data.id}`
                 if(req.query.resetcache) {
                     flash_url += "&resetcache=1"
                 }
+
+                if(flash_url.includes("cps2.swf")
+                || flash_url.includes("2012.swf")) {
+                    // the 2 odd ones that just won't work without this
+                    flash_url += "&BASE_YT_URL=" + encodeURIComponent(
+                        "http://" + config.ip + ":" + config.port + "/"
+                    )
+                }
                 
                 code = code.replace(
                     `<!--yt2009_f-->`,
@@ -2756,6 +2763,9 @@ https://web.archive.org/web/20091111/http://www.youtube.com/watch?v=${data.id}`
                     bannerUrl = "/assets/" + (data.newBanner || data.banner)
                     dataSent = true
                     callback(bannerUrl)
+                } else {
+                    dataSent = true
+                    callback(null)
                 }
             }}, identif, true)
             setTimeout(() => {

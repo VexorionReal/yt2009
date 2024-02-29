@@ -42,12 +42,6 @@ try {
     throw new Error('invalid YT2009_MAINTAIN_MAX_CACHE_SIZE');
 }
 
-// set public
-if(process.env.YT2009_PUBLIC) {
-    cfg.public = process.env.YT2009_PUBLIC;
-}
-
-
 // set env
 if(process.env.YT2009_ENV === 'dev' || process.env.YT2009_ENV === 'prod') {
     cfg.env = process.env.YT2009_ENV;
@@ -57,7 +51,58 @@ if(process.env.YT2009_ENV === 'dev' || process.env.YT2009_ENV === 'prod') {
 
 // set ip
 // no simple way to verify validity afaik, will need to trust the user on this one
-cfg.ip = process.env.YT2009_IP;
+if(process.env.YT2009_PUBLIC) {
+    cfg.ip = process.env.YT2009_IP;
+}
+
+// set fallback
+switch (process.env.YT2009_FALLBACK) {
+    case 'true':
+        cfg.fallbackMode = true;
+        break;
+    case 'false':
+        cfg.fallbackMode = false;
+        break;
+    default:
+        throw new Error('invalid YT2009_FALLBACK')
+}
+
+// set master server
+if(process.env.YT2009_MASTERSERVER) {
+    cfg.overrideMaster = process.env.YT2009_MASTERSERVER;
+}
+
+// set disable master server
+switch (process.env.YT2009_DISABLEMASTER) {
+    case 'true':
+        cfg.disableWs = true;
+        break;
+    case 'false':
+        cfg.disableWs = false;
+        break;
+    default:
+        throw new Error('invalid YT2009_DISABLEMASTER')
+}
+
+// set locked tokens
+if(process.env.YT2009_LOCKED_TOKENS) {
+    cfg.templocked_tokens = process.env.YT2009_LOCKED_TOKENS.split(',');
+}
+
+// set logged tokens
+if(process.env.YT2009_LOGGED_TOKENS) {
+    cfg.logged_tokens = process.env.YT2009_LOGGED_TOKENS.split(',');
+}
+
+// set homepage text
+if(process.env.YT2009_HOMEPAGETEXT) {
+    cfg.customHomepageText = process.env.YT2009_HOMEPAGETEXT;
+}
+
+// set redir
+if(process.env.YT2009_REDIR) {
+    cfg.redirmode = process.env.YT2009_REDIR;
+}
 
 // set ssl
 switch (process.env.YT2009_SSL) {
@@ -85,8 +130,10 @@ if (cfg.useSSL) {
     }
 }
 
-// try to get tokens from old config and if no tokens are found then generate new ones
-if (oldtokens) {
+// try to get tokens from env, if there's none then take get from old config and if no tokens are found then generate new ones
+if (process.env.YT2009_TOKENS) {
+    cfg.tokens = process.env.YT2009_TOKENS.split(',');
+} else if (oldtokens) {
     cfg.tokens = oldtokens;
 } else {
     // code taken from post_config_setup.js
